@@ -3,6 +3,7 @@ import * as Stats from 'stats-js';
 import * as DAT from 'dat-gui';
 import Icosphere from './geometry/Icosphere';
 import Square from './geometry/Square';
+import Cube from './geometry/Cube';
 import OpenGLRenderer from './rendering/gl/OpenGLRenderer';
 import Camera from './Camera';
 import {setGL} from './globals';
@@ -13,13 +14,24 @@ import ShaderProgram, {Shader} from './rendering/gl/ShaderProgram';
 const controls = {
   tesselations: 5,
   'Load Scene': loadScene, // A function pointer, essentially
+  color: [255, 0, 0, 1],
+  shader: "Lambert",
 };
 
 let icosphere: Icosphere;
 let square: Square;
 let prevTesselations: number = 5;
+let cube : Cube;
+var prevColor : number[];
+prevColor = [255, 0, 0, 1];
+var prevShader : string;
+prevShader = "Lambert";
+var t : number;
+t = 0;
 
 function loadScene() {
+  cube = new Cube(vec3.fromValues(0, 0, 0));
+  cube.create();
   icosphere = new Icosphere(vec3.fromValues(0, 0, 0), 1, controls.tesselations);
   icosphere.create();
   square = new Square(vec3.fromValues(0, 0, 0));
@@ -37,9 +49,10 @@ function main() {
 
   // Add controls to the gui
   const gui = new DAT.GUI();
-  gui.add(controls, 'tesselations', 0, 8).step(1);
   gui.add(controls, 'Load Scene');
-
+  gui.add(controls, 'tesselations', 0, 8).step(1);
+  gui.addColor(controls, 'color');
+  gui.add(controls, 'shader', [ 'Lambert', 'Deform'])
   // get canvas and webgl context
   const canvas = <HTMLCanvasElement> document.getElementById('canvas');
   const gl = <WebGL2RenderingContext> canvas.getContext('webgl2');
@@ -64,8 +77,14 @@ function main() {
     new Shader(gl.FRAGMENT_SHADER, require('./shaders/lambert-frag.glsl')),
   ]);
 
+  const deform = new ShaderProgram([
+    new Shader(gl.VERTEX_SHADER, require('./shaders/deform.vert.glsl')),
+    new Shader(gl.FRAGMENT_SHADER, require('./shaders/deform.frag.glsl')),
+  ]);
+
   // This function will be called every frame
   function tick() {
+    t = t + 1;
     camera.update();
     stats.begin();
     gl.viewport(0, 0, window.innerWidth, window.innerHeight);
@@ -76,10 +95,36 @@ function main() {
       icosphere = new Icosphere(vec3.fromValues(0, 0, 0), 1, prevTesselations);
       icosphere.create();
     }
-    renderer.render(camera, lambert, [
-      icosphere,
+
+    if (controls.color != prevColor)
+    {
+      prevColor = controls.color;
+    }
+
+    var currentShader: ShaderProgram;
+
+    if (controls.shader != prevShader)
+    {
+      prevShader = controls.shader;
+    }
+
+    if (prevShader == "Lambert")
+    {
+      currentShader = lambert;
+    }
+
+    if (prevShader == "Deform")
+    {
+      currentShader = deform;
+    }
+
+    renderer.render(camera, currentShader, [
+      cube
+      //icosphere,
       // square,
-    ]);
+    ], prevColor[0] / 255, prevColor[1] / 255, prevColor[2] / 255, prevColor[3],
+       t);
+       //console.log(t);
     stats.end();
 
     // Tell the browser to call `tick` again whenever it renders a new frame
